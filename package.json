@@ -12,11 +12,16 @@
   "dependencies": {
     "colors": "^1.4.0",
     "express": "^4.17.1",
+    "imagemin": "^7.0.1",
+    "imagemin-jpegtran": "^7.0.0",
+    "imagemin-webp": "^6.0.0",
     "mongoose": "^5.9.26",
     "node-cron": "^2.0.3",
     "node-fetch": "^2.6.0",
     "node-gzip": "^1.1.2",
-    "readline-sync": "^1.4.10",
-    "webp-converter": "^2.2.8"
+    "readline-sync": "^1.4.10"
+  },
+  "devDependencies": {
+    "imagemin-pngquant": "^9.0.1"
   }
 }
