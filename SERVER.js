@@ -8,8 +8,7 @@ const {ungzip} = require('node-gzip');
 const colors = require('colors');
 const mongoose = require('mongoose');
 const movie = require('./models/movie.js');
-const allMoviesID = require('./models/allMoviesID.js');
-const partialMovie = require('./models/partial_movie.js');
+const movies_id = require('./models/movies_id.js');
 const readlineSync = require('readline-sync');
 const imageMin = require('imagemin');
 const imageminWebp = require('imagemin-webp');
@@ -165,18 +164,12 @@ const startMoviesParsing = async (count, delay) => {
             }
         });
         console.log("[PARSER]: Filtered (popularity > 1.00) data array length is: ".green, colors.cyan(mostPopular.length));
-        // Save ID's array to database
-        const saveAllMoviesID = allMoviesID({items: mostPopular});
+        // // Save ID's array to database
+        const saveAllMoviesID = movies_id({items: mostPopular});
         await saveAllMoviesID.save();
         console.log("[PARSER]: Saved to database array with id's, length is: ".green, colors.cyan(mostPopular.length));
         // Call downloader function for parsing or update
-        await contentDownloader(mostPopular, count, delay)
-        // Convert JPG posters and backdrops to webp format
-        await convertImages('img_movie_posters/*.{jpg,png}', 'build/images_posters');
-        await convertImages('img_movie_backdrop/*.{jpg,png}', 'build/images_backdrop');
-        // Delete folders with JPG posters and backdrops
-        await deleteFolder("img_movie_posters");
-        await deleteFolder("img_movie_backdrops");
+        await contentDownloader(mostPopular, count, delay);
     } catch (e) {
         console.log(colors.red(e.message))
     }
@@ -213,23 +206,18 @@ const checkAndCompareNewMovies = async (count, delay) => {
         });
         console.log("[UPDATER]: Filtered (popularity > 1.00) data array length is:".green, colors.cyan(newData.length));
         // Array with old data from database (only ID's)
-        const oldData = await allMoviesID.find({});
+        const oldData = await movies_id.find({});
         console.log("[UPDATER]: Previous period data array (from database) length is:".green, colors.cyan(oldData[0].items.length));
         // Array with difference between New Data and Old data from database
         let difference = newData.filter(x => !oldData[0].items.includes(x));
         console.log("[UPDATER]: Difference between new data and array with id's (from database) is:".green, colors.cyan(difference.length));
         // Call downloader function for parsing or update
         await contentDownloader(difference, count, delay);
-        // Convert JPG posters and backdrops to webp format
-        await convertImages('img_movie_posters/*.{jpg,png}', 'build/images_posters');
-        await convertImages('img_movie_backdrop/*.{jpg,png}', 'build/images_backdrop');
-        // Delete folders with JPG posters and backdrops
-        await deleteFolder("img_movie_posters");
-        await deleteFolder("img_movie_backdrops");
     } catch (e) {
         console.log(colors.red(e.message))
     }
 };
+
 const contentDownloader = async (array, count, delay) => {
     try {
         // Timer function for get estimated time
@@ -306,8 +294,8 @@ const contentDownloader = async (array, count, delay) => {
                         success = success + 1;
                     } else {
                         // If doesnt contain needed data push to partial object on database for next time check
-                        // const PARTIAL_DOWNLOADED = new partialMovie(data);
-                        // await PARTIAL_DOWNLOADED.save();
+                        // const MISSED = new movies_id(data);
+                        // await MISSED.save();
                         missed = missed + 1;
                     }
 
@@ -320,6 +308,7 @@ const contentDownloader = async (array, count, delay) => {
                 console.log("------------------------------".yellow);
             }
         }, delay);
+
     } catch (e) {
         console.log(colors.red(e.message))
     }
@@ -331,7 +320,7 @@ const initialization = async () => {
         await createFolder("img_movie_posters");
         await createFolder("img_movie_backdrops");
         // Check needed data in database (Movies, TV Shows)
-        const movies = await allMoviesID.find({});
+        const movies = await movies_id.find({});
 
         if (movies.length) {
             // If movies exists -> start check updates and compare with prev day movies array
@@ -340,7 +329,7 @@ const initialization = async () => {
             await checkAndCompareNewMovies(countOfParsingItems, delay);
         } else {
             console.log("[INITIALIZATION]: WARNING! Array with Movies id's in database doesn't exists!".yellow);
-            console.log("[INITIALIZATION]: Next step is try download movies data, parsing them, and create array with movies id's in database ..".yellow);
+            console.log("[INITIALIZATION]: Next step is try download movies data, parsing them, and create array with movies id's in database..".yellow);
             await startMoviesParsing(countOfParsingItems, delay);
         }
 
@@ -369,7 +358,8 @@ const startServerMenu = async () => {
         'Continue start server'.cyan,
         'Start parsing all content'.cyan,
         'Start update existing content'.cyan,
-        'Create all needed folders'.cyan
+        'Create all needed folders'.cyan,
+        'Convert Images and Delete Folders with JPG'.cyan
     ];
     const questionType = readlineSync.keyInSelect(processType, '[SERVER]: Hello my master! What process do you want to run ?'.green);
 
@@ -391,6 +381,14 @@ const startServerMenu = async () => {
                 await createFolder("download");
                 await createFolder("img_movie_posters");
                 await createFolder("img_movie_backdrops");
+                break;
+            case 4: // Convert Images and Delete Folders with JPG
+                // Convert JPG posters and backdrops to webp format
+                await convertImages('img_movie_posters/*.{jpg,png}', 'build/images_posters');
+                await convertImages('img_movie_backdrop/*.{jpg,png}', 'build/images_backdrop');
+                // Delete folders with JPG posters and backdrops
+                await deleteFolder("img_movie_posters");
+                await deleteFolder("img_movie_backdrops");
                 break;
             default:
                 break;
