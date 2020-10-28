@@ -9,14 +9,16 @@ const colors = require('colors');
 const mongoose = require('mongoose');
 const movie = require('./models/movie.js');
 const movies_id = require('./models/movies_id.js');
+const movies_report = require('./models/movies_report.js');
 const readlineSync = require('readline-sync');
 const imageMin = require('imagemin');
-const imageminWebp = require('imagemin-webp');
+const imageMinWebp = require('imagemin-webp');
 
 const app = express();
 const httpServer = http.createServer(app);
 const PORT = 8080;
 const API_KEY = '37381515063aba22627eb415da0adfe3';
+const VIDEOCDN_API_TOKEN = 'QDH5tZqrotr27szq3U9Yx2lEgunhKbuo';
 const language = 'language=ru';
 const region = 'region=RU';
 
@@ -28,7 +30,7 @@ const region = 'region=RU';
 // });
 
 const countOfParsingItems = 20;
-const delay = 20000;
+const delay = 10000;
 
 const deleteItem = item => {
     fs.stat(item, (err) => {
@@ -43,15 +45,16 @@ const deleteItem = item => {
 
 const deleteFolder = folder => {
     fs.rmdirSync(folder, { recursive: true });
-    console.log(`[SERVER]: Folder with JPG images deleted: ${colors.cyan(folder)}`.green);
+    console.log(`[SERVER]: Folder with JPG images deleted:`.green, colors.cyan(folder));
 };
 
 const convertImages = async (input, output) => {
     try {
+        console.log(`[SERVER]: Start convert ${colors.cyan(input)}`.green, `and put images to: ${colors.cyan(output)}`.green);
         await imageMin([input], {
             destination: output,
             plugins: [
-                imageminWebp({quality: 75})
+                imageMinWebp({quality: 75})
             ]
         });
         console.log(`[SERVER]: All images from folder ${colors.cyan(input)}`.green, `successfully converted and now destination is ${colors.cyan(output)}`.green);
@@ -164,10 +167,6 @@ const startMoviesParsing = async (count, delay) => {
             }
         });
         console.log("[PARSER]: Filtered (popularity > 1.00) data array length is: ".green, colors.cyan(mostPopular.length));
-        // // Save ID's array to database
-        const saveAllMoviesID = movies_id({items: mostPopular});
-        await saveAllMoviesID.save();
-        console.log("[PARSER]: Saved to database array with id's, length is: ".green, colors.cyan(mostPopular.length));
         // Call downloader function for parsing or update
         await contentDownloader(mostPopular, count, delay);
     } catch (e) {
@@ -221,8 +220,8 @@ const checkAndCompareNewMovies = async (count, delay) => {
 const contentDownloader = async (array, count, delay) => {
     try {
         // Timer function for get estimated time
-        const timer = (items, count) => {
-            const timestamp = (items / count) * 10;
+        const timer = (items, count, delay) => {
+            const timestamp = (items / count) * (delay / 1000);
             const hoursTime = Math.floor(timestamp / 60 / 60);
             const minutesTime = Math.floor(timestamp / 60) - (hoursTime * 60);
             const secondsTime = timestamp % 60;
@@ -230,8 +229,9 @@ const contentDownloader = async (array, count, delay) => {
 
             console.log("Time for end:".green, colors.cyan(formatted), "hours".green);
         };
-
-        let success = 0;
+        // Add movie's ID if them downloaded successful
+        let successDownloaded = [];
+        // Increase number if download missed
         let missed = 0;
 
         console.log("///////////////////////////////////".yellow);
@@ -245,6 +245,23 @@ const contentDownloader = async (array, count, delay) => {
                 console.log("///// END DOWNLOAD ONE BY ONE /////".yellow);
                 console.log("///////////////////////////////////".yellow);
                 clearInterval(interval);
+                // Save ID's array to database
+                const saveAllMoviesID = movies_id({items: successDownloaded});
+                await saveAllMoviesID.save();
+                console.log("[SERVER]: Saved to database array with successfully downloaded id's, length is: ".green, colors.cyan(mostPopular.length));
+                // Save report to database about download content
+                const report = movies_report({
+                    success_download: successDownloaded.length,
+                    missed_download: missed
+                });
+                await report.save();
+                console.log("[SERVER]: Saved to database download report object..".green);
+
+                cron.schedule("* 1 * * *", function() {
+                    console.log("<----- START CRON JOB ----->");
+                    console.log("I'm logging every hour =)");
+                    console.log("<----- END CRON JOB ----->");
+                });
             } else {
                 // Round array include countOfParsingItems number items
                 const roundToDownload = [];
@@ -261,9 +278,9 @@ const contentDownloader = async (array, count, delay) => {
                     const data = await response.json();
 
                     // Getting from VideoCDN
-                    const videoCdnResponse = await fetch(`https://videocdn.tv/api/movies?api_token=QDH5tZqrotr27szq3U9Yx2lEgunhKbuo&direction=desc&field=global&limit=10&ordering=last_media_accepted&imdb_id=${data.imdb_id}`);
+                    const videoCdnResponse = await fetch(`https://videocdn.tv/api/movies?api_token=${VIDEOCDN_API_TOKEN}&direction=desc&field=global&limit=10&ordering=last_media_accepted&imdb_id=${data.imdb_id}`);
                     const videoCdnData = await videoCdnResponse.json();
-                    console.log("[DOWNLOADER]: VideoCDN by id".green, colors.cyan(id), "exist's:".green, colors.cyan(videoCdnData.data.length ? "true" : "false"), videoCdnData.data.length ? `title: "${colors.cyan(data.title)}"`.green : "");
+                    console.log("[DOWNLOADER]: VideoCDN by id".green, colors.cyan(id), "exist's:".green, colors.cyan(videoCdnData.data.length ? "true" : "false"), videoCdnData.data.length ? `title: ${colors.cyan(data.title)}`.green : `title: ${colors.red(data.title)}`.green);
 
                     // If VideoCDN response contains needed concat data with previous object
                     if (videoCdnData.data.length && data.poster_path && data.backdrop_path) {
@@ -291,7 +308,7 @@ const contentDownloader = async (array, count, delay) => {
                         // And push to successful object on database
                         const SUCCESSFUL_DOWNLOADED = new movie(data);
                         await SUCCESSFUL_DOWNLOADED.save();
-                        success = success + 1;
+                        successDownloaded.push(data.imdb_id);
                     } else {
                         // If doesnt contain needed data push to partial object on database for next time check
                         // const MISSED = new movies_id(data);
@@ -302,9 +319,9 @@ const contentDownloader = async (array, count, delay) => {
                 }
                 // Some useful system information
                 console.log("..of array length:".green, colors.cyan(array.length));
-                console.log("Success:".green, colors.cyan(success));
+                console.log("Success:".green, colors.cyan(successDownloaded.length));
                 console.log("Missed:".green, colors.cyan(missed));
-                await timer(array.length, count);
+                await timer(array.length, count, delay);
                 console.log("------------------------------".yellow);
             }
         }, delay);
@@ -346,7 +363,6 @@ const startServer = async () => {
             useCreateIndex: true
         });
         httpServer.listen(PORT, () => console.log(`[SERVER]: App has been started on port ${colors.cyan(PORT)}..`.green));
-
     } catch (e) {
         console.log(colors.red(e.message))
     }
@@ -359,7 +375,8 @@ const startServerMenu = async () => {
         'Start parsing all content'.cyan,
         'Start update existing content'.cyan,
         'Create all needed folders'.cyan,
-        'Convert Images and Delete Folders with JPG'.cyan
+        'Convert Images and Delete Folders with JPG'.cyan,
+        'Delete Folders with JPG images'.cyan
     ];
     const questionType = readlineSync.keyInSelect(processType, '[SERVER]: Hello my master! What process do you want to run ?'.green);
 
@@ -382,10 +399,12 @@ const startServerMenu = async () => {
                 await createFolder("img_movie_posters");
                 await createFolder("img_movie_backdrops");
                 break;
-            case 4: // Convert Images and Delete Folders with JPG
+            case 4: // Convert Images
                 // Convert JPG posters and backdrops to webp format
                 await convertImages('img_movie_posters/*.{jpg,png}', 'build/images_posters');
                 await convertImages('img_movie_backdrop/*.{jpg,png}', 'build/images_backdrop');
+                break;
+            case 5: // Delete Folders with JPG
                 // Delete folders with JPG posters and backdrops
                 await deleteFolder("img_movie_posters");
                 await deleteFolder("img_movie_backdrops");
