@@ -74,7 +74,10 @@ const convertImages = async (input, output) => {
             const interval = setInterval(async () => {
                 if (convertStack.length === 0) {
                     clearInterval(interval);
-                    console.log(`[IMG_CONVERTER]: All images from folder ${colors.cyan(input)}`.green, `successfully converted and now destination is ${colors.cyan(output)}`.green);
+                    console.log(`[IMG_CONVERTER]: Finish! All images from folder ${colors.cyan(input)}`.green, `successfully converted and now destination is ${colors.cyan(output)}`.green);
+                    fs.readdir(output,  (err, files) => {
+                        console.log(`[IMG_CONVERTER]: Files: ${colors.cyan(files.length)}`.green, `on ${colors.cyan(output)}`.green);
+                    });
                 } else {
                     const roundToConvert = [];
 
@@ -96,11 +99,11 @@ const convertImages = async (input, output) => {
 
                     // Some useful system information
                     console.log("..of array length:".green, colors.cyan(convertStack.length));
-                    await timer(convertStack.length, 20, 20000);
+                    await timer(convertStack.length, 20, 10000);
                     console.log("------------------------------".yellow);
                 }
 
-            }, 20000);
+            }, 10000);
 
 
         });
@@ -439,7 +442,7 @@ const startServerMenu = async () => {
             case 4: // Convert Images
                 // Convert JPG posters and backdrops to webp format
                 await convertImages('img_movie_posters', 'build/images_posters');
-                //await convertImages('img_movie_backdrops', 'build/images_backdrop');
+                await convertImages('img_movie_backdrops', 'build/images_backdrop');
                 break;
             case 5: // Delete Folders with JPG
                 // Delete folders with JPG posters and backdrops
