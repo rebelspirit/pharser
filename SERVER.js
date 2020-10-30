@@ -32,6 +32,17 @@ const region = 'region=RU';
 const countOfParsingItems = 20;
 const delay = 10000;
 
+// Timer function for get estimated time
+const timer = (items, count, delay) => {
+    const timestamp = (items / count) * (delay / 1000);
+    const hoursTime = Math.floor(timestamp / 60 / 60);
+    const minutesTime = Math.floor(timestamp / 60) - (hoursTime * 60);
+    const secondsTime = timestamp % 60;
+    const formatted = hoursTime + ':' + minutesTime + ':' + secondsTime;
+
+    console.log("Time for end:".green, colors.cyan(formatted), "hours".green);
+};
+
 const deleteItem = item => {
     fs.stat(item, (err) => {
         if (err) return console.error(err);
@@ -50,6 +61,7 @@ const deleteFolder = folder => {
 
 const convertImages = async (input, output) => {
     const convertStack = [];
+
     try {
         await fs.readdir(input, (err, files) => {
             files.forEach(file => {
@@ -59,18 +71,38 @@ const convertImages = async (input, output) => {
             let count = convertStack.length;
 
             console.log(`[IMG_CONVERTER]: Start convert ${colors.cyan(input)}`.green, `length: ${colors.cyan(count)}`.green);
+            const interval = setInterval(async () => {
+                if (convertStack.length === 0) {
+                    clearInterval(interval);
+                    console.log(`[IMG_CONVERTER]: All images from folder ${colors.cyan(input)}`.green, `successfully converted and now destination is ${colors.cyan(output)}`.green);
+                } else {
+                    const roundToConvert = [];
 
-            convertStack.forEach(async item => {
-                console.log(`[IMG_CONVERTER]: Start convert ${colors.cyan(item)}`.green, `and put image to: ${colors.cyan(output)}`.green, `to finish: ${colors.cyan(count = count - 1)}`.green);
+                    for (let i = 0; i < 20; i++) {
+                        const item = convertStack.shift();
+                        roundToConvert.push(item);
+                    }
 
-                await imageMin([`${input}/${item}`], {
-                    destination: output,
-                    plugins: [
-                        imageMinWebp({quality: 75})
-                    ]
-                });
-            });
-            console.log(`[IMG_CONVERTER]: All images from folder ${colors.cyan(input)}`.green, `successfully converted and now destination is ${colors.cyan(output)}`.green);
+                    for (const item of roundToConvert) {
+                        console.log(`[IMG_CONVERTER]: Start convert ${colors.cyan(item)}`.green, `and put image to: ${colors.cyan(output)}`.green, `to finish: ${colors.cyan(count = count - 1)}`.green);
+
+                        await imageMin([`${input}/${item}`], {
+                            destination: output,
+                            plugins: [
+                                imageMinWebp({quality: 75})
+                            ]
+                        });
+                    }
+
+                    // Some useful system information
+                    console.log("..of array length:".green, colors.cyan(convertStack.length));
+                    await timer(convertStack.length, 20, 20000);
+                    console.log("------------------------------".yellow);
+                }
+
+            }, 20000);
+
+
         });
 
     } catch (e) {
@@ -234,16 +266,6 @@ const checkAndCompareNewMovies = async (count, delay) => {
 
 const contentDownloader = async (array, count, delay) => {
     try {
-        // Timer function for get estimated time
-        const timer = (items, count, delay) => {
-            const timestamp = (items / count) * (delay / 1000);
-            const hoursTime = Math.floor(timestamp / 60 / 60);
-            const minutesTime = Math.floor(timestamp / 60) - (hoursTime * 60);
-            const secondsTime = timestamp % 60;
-            const formatted = hoursTime + ':' + minutesTime + ':' + secondsTime;
-
-            console.log("Time for end:".green, colors.cyan(formatted), "hours".green);
-        };
         // Add movie's ID if them downloaded successful
         let successDownloaded = [];
         // Increase number if download missed
@@ -417,7 +439,7 @@ const startServerMenu = async () => {
             case 4: // Convert Images
                 // Convert JPG posters and backdrops to webp format
                 await convertImages('img_movie_posters', 'build/images_posters');
-                await convertImages('img_movie_backdrop', 'build/images_backdrop');
+                //await convertImages('img_movie_backdrops', 'build/images_backdrop');
                 break;
             case 5: // Delete Folders with JPG
                 // Delete folders with JPG posters and backdrops
