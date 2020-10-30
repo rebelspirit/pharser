@@ -49,15 +49,30 @@ const deleteFolder = folder => {
 };
 
 const convertImages = async (input, output) => {
+    const convertStack = [];
     try {
-        console.log(`[SERVER]: Start convert ${colors.cyan(input)}`.green, `and put images to: ${colors.cyan(output)}`.green);
-        await imageMin([input], {
-            destination: output,
-            plugins: [
-                imageMinWebp({quality: 75})
-            ]
+        await fs.readdir(input, (err, files) => {
+            files.forEach(file => {
+                convertStack.push(file)
+            });
+
+            let count = convertStack.length;
+
+            console.log(`[IMG_CONVERTER]: Start convert ${colors.cyan(input)}`.green, `length: ${colors.cyan(count)}`.green);
+
+            convertStack.forEach(async item => {
+                console.log(`[IMG_CONVERTER]: Start convert ${colors.cyan(item)}`.green, `and put image to: ${colors.cyan(output)}`.green, `to finish: ${colors.cyan(count = count - 1)}`.green);
+
+                await imageMin([`${input}/${item}`], {
+                    destination: output,
+                    plugins: [
+                        imageMinWebp({quality: 75})
+                    ]
+                });
+            });
+            console.log(`[IMG_CONVERTER]: All images from folder ${colors.cyan(input)}`.green, `successfully converted and now destination is ${colors.cyan(output)}`.green);
         });
-        console.log(`[SERVER]: All images from folder ${colors.cyan(input)}`.green, `successfully converted and now destination is ${colors.cyan(output)}`.green);
+
     } catch (e) {
         console.log(colors.red(e.message))
     }
@@ -248,7 +263,7 @@ const contentDownloader = async (array, count, delay) => {
                 // Save ID's array to database
                 const saveAllMoviesID = movies_id({items: successDownloaded});
                 await saveAllMoviesID.save();
-                console.log("[SERVER]: Saved to database array with successfully downloaded id's, length is: ".green, colors.cyan(mostPopular.length));
+                console.log("[SERVER]: Saved to database array with successfully downloaded id's, length is: ".green, colors.cyan(successDownloaded.length));
                 // Save report to database about download content
                 const report = movies_report({
                     success_download: successDownloaded.length,
@@ -375,7 +390,7 @@ const startServerMenu = async () => {
         'Start parsing all content'.cyan,
         'Start update existing content'.cyan,
         'Create all needed folders'.cyan,
-        'Convert Images and Delete Folders with JPG'.cyan,
+        'Convert Images from JPG to WebP'.cyan,
         'Delete Folders with JPG images'.cyan
     ];
     const questionType = readlineSync.keyInSelect(processType, '[SERVER]: Hello my master! What process do you want to run ?'.green);
@@ -401,8 +416,8 @@ const startServerMenu = async () => {
                 break;
             case 4: // Convert Images
                 // Convert JPG posters and backdrops to webp format
-                await convertImages('img_movie_posters/*.{jpg,png}', 'build/images_posters');
-                await convertImages('img_movie_backdrop/*.{jpg,png}', 'build/images_backdrop');
+                await convertImages('img_movie_posters', 'build/images_posters');
+                await convertImages('img_movie_backdrop', 'build/images_backdrop');
                 break;
             case 5: // Delete Folders with JPG
                 // Delete folders with JPG posters and backdrops
