@@ -7,4 +7,4 @@ const schema = new Schema({
     total: {type: Number, default: 0}
 });
 
-module.exports = model('movies_report', schema);
+module.exports = model('serials_report', schema);
